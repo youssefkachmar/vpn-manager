@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - VPN Manager{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-gear-fill"></i> Server Settings</h2>
+        <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+
+    <!-- Server Information Card -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="bi bi-server"></i> WireGuard Server Information</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="fw-bold text-secondary">Server Endpoint:</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" value="{{ settings.endpoint }}" readonly>
+                        <button class="btn btn-outline-secondary" onclick="copyToClipboard('{{ settings.endpoint }}')">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="fw-bold text-secondary">Server Public Key:</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" value="{{ settings.server_public_key }}" readonly>
+                        <button class="btn btn-outline-secondary" onclick="copyToClipboard('{{ settings.server_public_key }}')">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="fw-bold text-secondary">Network Interface:</label>
+                    <input type="text" class="form-control" value="{{ settings.interface }}" readonly>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Card -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0"><i class="bi bi-bar-chart-fill"></i> Peer Statistics</h5>
+        </div>
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col-md-4 mb-3">
+                    <div class="p-3 bg-light rounded">
+                        <h3 class="text-primary mb-0">{{ settings.total_peers }}</h3>
+                        <small class="text-secondary">Total Peers</small>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="p-3 bg-light rounded">
+                        <h3 class="text-success mb-0">{{ settings.enabled_peers }}</h3>
+                        <small class="text-secondary">Enabled Peers</small>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="p-3 bg-light rounded">
+                        <h3 class="text-warning mb-0">{{ settings.disabled_peers }}</h3>
+                        <small class="text-secondary">Disabled Peers</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- WireGuard Commands Card -->
+    <div class="card shadow-sm mt-4">
+        <div class="card-header bg-dark text-white">
+            <h5 class="mb-0"><i class="bi bi-terminal"></i> Useful Commands</h5>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="fw-bold">View WireGuard Status:</label>
+                <pre class="bg-dark text-white p-2 rounded"><code>sudo wg show {{ settings.interface }}</code></pre>
+            </div>
+            <div class="mb-3">
+                <label class="fw-bold">Restart WireGuard:</label>
+                <pre class="bg-dark text-white p-2 rounded"><code>sudo systemctl restart wg-quick@{{ settings.interface }}</code></pre>
+            </div>
+            <div class="mb-3">
+                <label class="fw-bold">View WireGuard Logs:</label>
+                <pre class="bg-dark text-white p-2 rounded"><code>sudo journalctl -u wg-quick@{{ settings.interface }} -f</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(function() {
+        alert('Copied to clipboard!');
+    }, function(err) {
+        console.error('Could not copy text: ', err);
+    });
+}
+</script>
+{% endblock %}

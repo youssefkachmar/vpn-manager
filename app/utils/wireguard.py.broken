@@ -1,0 +1,232 @@
+import subprocess
+import os
+import qrcode
+from flask import current_app
+
+class WireGuardManager:
+    """Manages WireGuard VPN operations"""
+    
+    def __init__(self):
+        self.wg_path = '/usr/bin/wg'
+        self.wg_quick_path = '/usr/bin/wg-quick'
+        self.sudo_path = '/usr/bin/sudo'
+        self.interface = 'wg0'
+        self.server_config = '/etc/wireguard/wg0.conf'
+    
+    def generate_keys(self):
+        """Generate WireGuard private and public key pair"""
+        try:
+            # Generate private key
+            private_key = subprocess.check_output(
+                [self.wg_path, 'genkey'],
+                stderr=subprocess.PIPE
+            ).decode('utf-8').strip()
+            
+            # Generate public key from private key
+            public_key = subprocess.check_output(
+                [self.wg_path, 'pubkey'],
+                input=private_key.encode(),
+                stderr=subprocess.PIPE
+            ).decode('utf-8').strip()
+            
+            return private_key, public_key
+            
+        except FileNotFoundError:
+            raise Exception(f"WireGuard not found at {self.wg_path}. Please install wireguard-tools")
+        except subprocess.CalledProcessError as e:
+            raise Exception(f"Failed to generate keys: {e.stderr.decode() if e.stderr else str(e)}")
+    
+    def get_next_available_ip(self):
+        """Get the next available IP address in the VPN subnet"""
+        from app.models.peer import Peer
+        
+        # Get all existing IPs
+        existing_ips = [peer.ip_address for peer in Peer.query.all()]
+        
+        # Start from 10.0.0.2 (10.0.0.1 is server)
+        for i in range(2, 255):
+            ip = f"10.0.0.{i}"
+            if ip not in existing_ips:
+                return ip
+        
+        raise Exception("No available IP addresses in subnet")
+    
+    def get_server_public_key(self):
+        """Get the server's public key from WireGuard config"""
+        try:
+            with open(self.server_config, 'r') as f:
+                for line in f:
+                    if line.strip().startswith('PrivateKey'):
+                        private_key = line.split('=')[1].strip()
+                        # Generate public key from private key
+                        public_key = subprocess.check_output(
+                            [self.wg_path, 'pubkey'],
+                            input=private_key.encode(),
+                            stderr=subprocess.PIPE
+                        ).decode('utf-8').strip()
+                        return public_key
+        except Exception as e:
+            # Fallback: try to get from running interface
+            try:
+                output = subprocess.check_output(
+                    ['/usr/bin/sudo', self.wg_path, 'show', self.interface, 'public-key'],
+                    stderr=subprocess.PIPE
+                ).decode('utf-8').strip()
+                return output
+            except:
+                raise Exception(f"Could not get server public key: {str(e)}")
+        
+        raise Exception("Server public key not found in config")
+    
+    def generate_peer_config(self, private_key, ip_address, peer_id):
+    """Generate WireGuard configuration file for a peer"""
+    try:
+        server_public_key = self.get_server_public_key()
+    except:
+        server_public_key = "SERVER_PUBLIC_KEY_HERE"
+    
+    # Use DuckDNS domain for dynamic IP support
+    endpoint = current_app.config.get('WG_SERVER_ENDPOINT', 'vpnsrv.duckdns.org:51820')
+    
+    config = f"""[Interface]
+PrivateKey = {private_key}
+Address = {ip_address}/32
+DNS = 1.1.1.1, 8.8.8.8
+
+[Peer]
+PublicKey = {server_public_key}
+Endpoint = {endpoint}
+AllowedIPs = 0.0.0.0/0, ::/0
+PersistentKeepalive = 25
+"""
+    return config
+    
+    def generate_qrcode(self, config_content, peer_id):
+        """Generate QR code for WireGuard configuration"""
+        try:
+            # Create QR code
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_L,
+                box_size=10,
+                border=4,
+            )
+            qr.add_data(config_content)
+            qr.make(fit=True)
+            
+            # Generate image
+            img = qr.make_image(fill_color="black", back_color="white")
+            
+            # Save QR code
+            qr_dir = current_app.config['QRCODE_DIR']
+            os.makedirs(qr_dir, exist_ok=True)
+            
+            qr_filename = f'peer_{peer_id}.png'
+            qr_path = os.path.join(qr_dir, qr_filename)
+            
+            img.save(qr_path)
+            
+            return qr_path
+            
+        except Exception as e:
+            raise Exception(f"Failed to generate QR code: {str(e)}")
+    
+    def add_peer_to_server(self, public_key, ip_address):
+        """Add peer to WireGuard server configuration"""
+        try:
+            # Add peer using wg command (live) with allowed-ips
+            subprocess.run(
+                ['/usr/bin/sudo', self.wg_path, 'set', self.interface, 
+                 'peer', public_key, 
+                 'allowed-ips', f'{ip_address}/32'],
+                check=True,
+                stderr=subprocess.PIPE,
+                stdout=subprocess.PIPE
+            )
+            
+            # Add to config file for persistence using helper script
+            subprocess.run(
+                ['/usr/bin/sudo', '/usr/local/bin/wg-add-peer', public_key, ip_address],
+                check=True,
+                stderr=subprocess.PIPE,
+                stdout=subprocess.PIPE
+            )
+            
+            return True
+            
+        except subprocess.CalledProcessError as e:
+            error_msg = e.stderr.decode() if e.stderr else str(e)
+            raise Exception(f"Failed to add peer to server: {error_msg}")
+        except Exception as e:
+            raise Exception(f"Failed to add peer to server config: {str(e)}")
+    
+    def remove_peer_from_server(self, public_key):
+        """Remove peer from WireGuard server"""
+        try:
+            # Remove from running config
+            subprocess.run(
+                ['/usr/bin/sudo', self.wg_path, 'set', self.interface, 'peer', public_key, 'remove'],
+                check=True,
+                stderr=subprocess.PIPE
+            )
+            
+            # Remove from config file using helper script
+            subprocess.run(
+                ['/usr/bin/sudo', '/usr/local/bin/wg-remove-peer', public_key],
+                check=True,
+                stderr=subprocess.PIPE
+            )
+            
+            return True
+            
+        except subprocess.CalledProcessError as e:
+            raise Exception(f"Failed to remove peer: {e.stderr.decode() if e.stderr else str(e)}")
+    
+    def get_interface_status(self):
+        """Get WireGuard interface status"""
+        try:
+            output = subprocess.check_output(
+                ['/usr/bin/sudo', self.wg_path, 'show', self.interface],
+                stderr=subprocess.PIPE
+            ).decode('utf-8')
+            return output
+        except subprocess.CalledProcessError:
+            return None
+    
+    def get_peer_status(self, public_key):
+        """Get status of a specific peer"""
+        try:
+            output = subprocess.check_output(
+                ['/usr/bin/sudo', self.wg_path, 'show', self.interface, 'dump'],
+                stderr=subprocess.PIPE
+            ).decode('utf-8')
+            
+            for line in output.split('\n'):
+                if public_key in line:
+                    parts = line.split('\t')
+                    if len(parts) >= 5:
+                        return {
+                            'public_key': parts[0],
+                            'endpoint': parts[2] if parts[2] != '(none)' else None,
+                            'latest_handshake': parts[4],
+                            'transfer_rx': parts[5] if len(parts) > 5 else '0',
+                            'transfer_tx': parts[6] if len(parts) > 6 else '0'
+                        }
+            
+            return None
+            
+        except Exception as e:
+            print(f"Error getting peer status: {str(e)}")
+            return None
+    
+    def reload_wireguard(self):
+        """Reload WireGuard configuration"""
+        try:
+            subprocess.run(
+                ['/usr/bin/sudo', '/usr/bin/systemctl', 'restart', f'wg-quick@{self.interface}'],
+                check=True,
+                stderr=subprocess.PIPE
+            )
+            return True
+        except subprocess.CalledProcessError as e:
+            raise Exception(f"Failed to reload WireGuard: {e.stderr.decode() if e.stderr else str(e)}")

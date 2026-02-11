@@ -1,0 +1,354 @@
+import subprocess
+import os
+import qrcode
+import time
+from app import db
+
+class WireGuardManager:
+    def __init__(self):
+        self.interface = 'wg0'
+        self.config_path = '/etc/wireguard/wg0.conf'
+
+    def get_server_private_key(self):
+        """Get the server's private key"""
+        try:
+            with open(self.config_path, 'r') as f:
+                for line in f:
+                    if line.strip().startswith('PrivateKey'):
+                        return line.split('=')[1].strip()
+        except Exception as e:
+            print(f"Error reading server private key: {e}")
+            return None
+
+    def get_server_public_key(self):
+        """Get the server's public key"""
+        try:
+            # First try to get it from wg show
+            result = subprocess.run(
+                ['/usr/bin/sudo', '/usr/bin/wg', 'show', self.interface, 'public-key'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            pubkey = result.stdout.strip()
+            if pubkey:
+                return pubkey
+        except:
+            pass
+        
+        # Fallback: derive from private key
+        try:
+            private_key = self.get_server_private_key()
+            if private_key:
+                result = subprocess.run(
+                    ['/usr/bin/wg', 'pubkey'],
+                    input=private_key,
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+                return result.stdout.strip()
+        except Exception as e:
+            print(f"Error getting server public key: {e}")
+        
+        return None
+
+    def get_main_interface(self):
+        """Get the main network interface"""
+        try:
+            result = subprocess.run(
+                ['/usr/bin/ip', 'route', 'show', 'default'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            interface = result.stdout.split()[4]
+            return interface
+        except Exception as e:
+            print(f"Error getting main interface: {e}")
+            return 'eth0'
+
+    def generate_keys(self):
+        """Generate WireGuard key pair"""
+        try:
+            # Generate private key
+            private_result = subprocess.run(
+                ['/usr/bin/wg', 'genkey'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            private_key = private_result.stdout.strip()
+
+            # Generate public key from private key
+            public_result = subprocess.run(
+                ['/usr/bin/wg', 'pubkey'],
+                input=private_key,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            public_key = public_result.stdout.strip()
+
+            # Generate preshared key
+            preshared_result = subprocess.run(
+                ['/usr/bin/wg', 'genpsk'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            preshared_key = preshared_result.stdout.strip()
+
+            return {
+                'private_key': private_key,
+                'public_key': public_key,
+                'preshared_key': preshared_key
+            }
+        except Exception as e:
+            print(f"Error generating keys: {e}")
+            return None
+
+    def generate_server_config(self):
+        """Generate WireGuard server configuration"""
+        from app.models.peer import Peer
+
+        # Only get enabled peers
+        peers = Peer.query.filter_by(enabled=True).all()
+
+        config = f"""[Interface]
+Address = 10.0.0.1/24
+ListenPort = 51820
+PrivateKey = {self.get_server_private_key()}
+PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o {self.get_main_interface()} -j MASQUERADE
+PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o {self.get_main_interface()} -j MASQUERADE
+
+"""
+
+        for peer in peers:
+            config += f"""# Peer: {peer.name}
+[Peer]
+PublicKey = {peer.public_key}
+AllowedIPs = {peer.ip_address}/32
+"""
+            if peer.preshared_key:
+                config += f"PresharedKey = {peer.preshared_key}\n"
+            config += "\n"
+
+        return config
+
+    def save_server_config(self):
+        """Save the server configuration to file"""
+        try:
+            config = self.generate_server_config()
+
+            # Write to temporary file
+            temp_path = '/tmp/wg0.conf'
+            with open(temp_path, 'w') as f:
+                f.write(config)
+
+            # Move to proper location with sudo
+            subprocess.run(
+                ['/usr/bin/sudo', 'cp', temp_path, self.config_path],
+                check=True
+            )
+
+            # Set proper permissions
+            subprocess.run(
+                ['/usr/bin/sudo', 'chmod', '600', self.config_path],
+                check=True
+            )
+
+            # Clean up
+            os.remove(temp_path)
+
+            return True
+        except Exception as e:
+            print(f"Error saving server config: {e}")
+            return False
+
+    def reload_wireguard(self):
+        """Reload WireGuard configuration"""
+        try:
+            subprocess.run(
+                ['/usr/bin/sudo', 'systemctl', 'restart', f'wg-quick@{self.interface}'],
+                check=True
+            )
+            return True
+        except Exception as e:
+            print(f"Error reloading WireGuard: {e}")
+            return False
+
+    def generate_peer_config(self, peer):
+        """Generate client configuration for a peer"""
+        from flask import current_app
+
+        server_public_key = self.get_server_public_key()
+        endpoint = current_app.config.get('WG_SERVER_ENDPOINT', 'your-server-ip:51820')
+
+        config = f"""[Interface]
+PrivateKey = {peer.private_key}
+Address = {peer.ip_address}/32
+DNS = 1.1.1.1, 8.8.8.8
+
+[Peer]
+PublicKey = {server_public_key}
+Endpoint = {endpoint}
+AllowedIPs = 0.0.0.0/0, ::/0
+"""
+        if peer.preshared_key:
+            config += f"PresharedKey = {peer.preshared_key}\n"
+
+        config += "PersistentKeepalive = 25\n"
+
+        return config
+
+    def save_peer_config(self, peer, config_content):
+        """Save peer configuration to file"""
+        try:
+            from flask import current_app
+            config_dir = current_app.config.get('CONFIG_DIR')
+
+            if not os.path.exists(config_dir):
+                os.makedirs(config_dir)
+
+            config_path = os.path.join(config_dir, f'peer_{peer.id}.conf')
+            with open(config_path, 'w') as f:
+                f.write(config_content)
+
+            return config_path
+        except Exception as e:
+            print(f"Error saving peer config: {e}")
+            return None
+
+    def generate_qrcode(self, config_content, peer_id):
+        """Generate QR code for peer configuration"""
+        try:
+            from flask import current_app
+            qrcode_dir = current_app.config.get('QRCODE_DIR')
+
+            if not os.path.exists(qrcode_dir):
+                os.makedirs(qrcode_dir, mode=0o755)
+
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_L,
+                box_size=10,
+                border=4,
+            )
+            qr.add_data(config_content)
+            qr.make(fit=True)
+
+            img = qr.make_image(fill_color="black", back_color="white")
+
+            qr_path = os.path.join(qrcode_dir, f'peer_{peer_id}.png')
+            img.save(qr_path)
+
+            # Set proper permissions
+            os.chmod(qr_path, 0o644)
+
+            return qr_path
+        except Exception as e:
+            print(f"Error generating QR code: {e}")
+            return None
+
+    def get_next_ip(self):
+        """Get the next available IP address"""
+        from app.models.peer import Peer
+
+        peers = Peer.query.all()
+        used_ips = [peer.ip_address for peer in peers]
+
+        # Start from 10.0.0.2 (server uses 10.0.0.1)
+        for i in range(2, 255):
+            ip = f'10.0.0.{i}'
+            if ip not in used_ips:
+                return ip
+
+        return None
+
+    def get_peer_stats(self):
+        """Get statistics for all peers from WireGuard"""
+        try:
+            result = subprocess.run(
+                ['/usr/bin/sudo', '/usr/bin/wg', 'show', self.interface, 'dump'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+
+            stats = {}
+            lines = result.stdout.strip().split('\n')
+
+            # Skip header line
+            for line in lines[1:]:
+                parts = line.split('\t')
+                if len(parts) >= 6:
+                    public_key = parts[0]
+                    endpoint = parts[2] if parts[2] != '(none)' else None
+                    latest_handshake = int(parts[4]) if parts[4] else 0
+                    rx_bytes = int(parts[5]) if parts[5] else 0
+                    tx_bytes = int(parts[6]) if parts[6] else 0
+
+                    # Peer is online if handshake was within last 3 minutes (180 seconds)
+                    current_time = int(time.time())
+                    is_online = latest_handshake > 0 and (current_time - latest_handshake) < 180
+
+                    stats[public_key] = {
+                        'endpoint': endpoint,
+                        'latest_handshake': latest_handshake,
+                        'rx_bytes': rx_bytes,
+                        'tx_bytes': tx_bytes,
+                        'online': is_online
+                    }
+
+            return stats
+        except subprocess.CalledProcessError as e:
+            print(f"Error getting peer stats: {e}")
+            return {}
+        except Exception as e:
+            print(f"Error parsing peer stats: {e}")
+            return {}
+
+    def toggle_peer(self, peer_id, enabled):
+        """Enable or disable a peer by updating WireGuard config"""
+        try:
+            from app.models.peer import Peer
+            peer = Peer.query.get(peer_id)
+            if not peer:
+                return False
+
+            # Update database
+            peer.enabled = enabled
+            db.session.commit()
+
+            # Regenerate WireGuard config (will only include enabled peers)
+            self.save_server_config()
+            self.reload_wireguard()
+
+            return True
+        except Exception as e:
+            print(f"Error toggling peer: {e}")
+            db.session.rollback()
+            return False
+
+    def delete_peer_files(self, peer_id):
+        """Delete peer configuration and QR code files"""
+        try:
+            from flask import current_app
+
+            # Delete config file
+            config_dir = current_app.config.get('CONFIG_DIR')
+            config_path = os.path.join(config_dir, f'peer_{peer_id}.conf')
+            if os.path.exists(config_path):
+                os.remove(config_path)
+
+            # Delete QR code
+            qrcode_dir = current_app.config.get('QRCODE_DIR')
+            qr_path = os.path.join(qrcode_dir, f'peer_{peer_id}.png')
+            if os.path.exists(qr_path):
+                os.remove(qr_path)
+
+            return True
+        except Exception as e:
+            print(f"Error deleting peer files: {e}")
+            return False

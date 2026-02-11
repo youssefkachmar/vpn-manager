@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}QR Code - {{ peer.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="bi bi-qr-code"></i> QR Code for {{ peer.name }}</h2>
+                </div>
+                <div class="card-body text-center">
+                    <img src="/qrcodes/{{ qr_filename }}"
+                         alt="QR Code for {{ peer.name }}"
+                         class="img-fluid mb-3"
+                         style="max-width: 400px;">
+
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        Scan this QR code with the WireGuard mobile app to connect
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('main.download_config', peer_id=peer.id) }}"
+                           class="btn btn-primary">
+                            <i class="bi bi-download"></i> Download Config File
+                        </a>
+                        <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Back to Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h5><i class="bi bi-phone"></i> Mobile Setup Instructions</h5>
+                    <ol>
+                        <li>Install WireGuard app from App Store or Google Play</li>
+                        <li>Open the app and tap "Add a tunnel"</li>
+                        <li>Select "Create from QR code"</li>
+                        <li>Scan the QR code above</li>
+                        <li>Tap the toggle to connect</li>
+                    </ol>
+
+                    <h5 class="mt-3"><i class="bi bi-laptop"></i> Desktop Setup</h5>
+                    <ol>
+                        <li>Download the config file using the button above</li>
+                        <li>Install WireGuard from wireguard.com</li>
+                        <li>Import the downloaded .conf file</li>
+                        <li>Activate the tunnel</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

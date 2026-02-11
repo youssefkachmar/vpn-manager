@@ -1,0 +1,11 @@
+[Interface]
+PrivateKey = sNZGOKCOINbL+2bQBLfc573AFH/9t8DNLgHGFivadGQ=
+Address = 10.0.0.2/32
+DNS = 1.1.1.1, 8.8.8.8
+
+[Peer]
+PublicKey = None
+Endpoint = vpnsrv.duckdns.org:51820
+AllowedIPs = 0.0.0.0/0, ::/0
+PresharedKey = L4tIbOPzT0KoJKrsEy24ZGT/a3A5gdroXHwiym68wpw=
+PersistentKeepalive = 25

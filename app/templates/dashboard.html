@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2><i class="bi bi-speedometer2"></i> VPN Dashboard</h2>
+                <div>
+                    <span class="me-3">Welcome, <strong>{{ username }}</strong></span>
+                    <a href="{{ url_for('main.new_peer') }}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Add New Peer
+                    </a>
+                    <a href="{{ url_for('main.settings') }}" class="btn btn-secondary">
+                        <i class="bi bi-gear"></i> Settings
+                    </a>
+                    <a href="{{ url_for('main.logout') }}" class="btn btn-outline-danger">
+                        <i class="bi bi-box-arrow-right"></i> Logout
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-people-fill"></i> Total Peers</h5>
+                    <h2>{{ peers|length }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-wifi"></i> Online Now</h5>
+                    <h2 id="online-count">0</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-check-circle"></i> Enabled</h5>
+                    <h2>{{ peers|selectattr('enabled')|list|length }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-secondary text-white">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="bi bi-pause-circle"></i> Disabled</h5>
+                    <h2>{{ peers|rejectattr('enabled')|list|length }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Peers List -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4><i class="bi bi-people"></i> Connected Peers</h4>
+                </div>
+                <div class="card-body">
+                    {% if peers %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>IP Address</th>
+                                    <th>Status</th>
+                                    <th>Enabled</th>
+                                    <th>Download</th>
+                                    <th>Upload</th>
+                                    <th>Last Seen</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for peer in peers %}
+                                <tr id="peer-row-{{ peer.id }}" {% if not peer.enabled %}class="table-secondary"{% endif %}>
+                                    <td>
+                                        <strong>{{ peer.name }}</strong>
+                                    </td>
+                                    <td>
+                                        <code>{{ peer.ip_address }}</code>
+                                    </td>
+                                    <td>
+                                        <span class="badge peer-status" data-peer-id="{{ peer.id }}" id="status-{{ peer.id }}">
+                                            <i class="bi bi-circle-fill"></i> <span class="status-text">Checking...</span>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if peer.enabled %}
+                                        <span class="badge bg-success">
+                                            <i class="bi bi-check-circle"></i> Enabled
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">
+                                            <i class="bi bi-pause-circle"></i> Disabled
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span id="rx-{{ peer.id }}" class="badge bg-info">0 B</span>
+                                    </td>
+                                    <td>
+                                        <span id="tx-{{ peer.id }}" class="badge bg-info">0 B</span>
+                                    </td>
+                                    <td>
+                                        <small id="last-seen-{{ peer.id }}">
+                                            {% if peer.last_seen %}
+                                            {{ peer.last_seen.strftime('%Y-%m-%d %H:%M') }}
+                                            {% else %}
+                                            Never
+                                            {% endif %}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <small>{{ peer.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <!-- QR Code Button -->
+                                            <a href="{{ url_for('main.show_qrcode', peer_id=peer.id) }}"
+                                               class="btn btn-sm btn-info"
+                                               title="Show QR Code">
+                                                <i class="bi bi-qr-code"></i>
+                                            </a>
+                                            
+                                            <!-- Download Config Button -->
+                                            <a href="{{ url_for('main.download_config', peer_id=peer.id) }}"
+                                               class="btn btn-sm btn-primary"
+                                               title="Download Config">
+                                                <i class="bi bi-download"></i>
+                                            </a>
+                                            
+                                            <!-- Toggle Enable/Disable Button -->
+                                            <form method="POST" action="{{ url_for('main.toggle_peer', peer_id=peer.id) }}" style="display: inline;">
+                                                {% if peer.enabled %}
+                                                <button type="submit" class="btn btn-sm btn-warning" title="Disable Peer" onclick="return confirm('Disable this peer?');">
+                                                    <i class="bi bi-pause-circle"></i>
+                                                </button>
+                                                {% else %}
+                                                <button type="submit" class="btn btn-sm btn-success" title="Enable Peer" onclick="return confirm('Enable this peer?');">
+                                                    <i class="bi bi-play-circle"></i>
+                                                </button>
+                                                {% endif %}
+                                            </form>
+                                            
+                                            <!-- Delete Button -->
+                                            <form method="POST" action="{{ url_for('main.delete_peer', peer_id=peer.id) }}" 
+                                                  onsubmit="return confirm('Are you sure you want to permanently delete peer \'{{ peer.name }}\'? This cannot be undone!');"
+                                                  style="display: inline;">
+                                                <button type="submit" class="btn btn-sm btn-danger" title="Delete Peer">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> No peers yet. <a href="{{ url_for('main.new_peer') }}">Create your first peer</a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="row mt-3">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <h6><i class="bi bi-info-circle"></i> Legend:</h6>
+                    <span class="badge bg-success me-2"><i class="bi bi-circle-fill"></i> Online</span> - Peer connected within last 3 minutes
+                    <span class="badge bg-danger me-2 ms-3"><i class="bi bi-circle-fill"></i> Offline</span> - Peer not connected
+                    <span class="badge bg-secondary me-2 ms-3"><i class="bi bi-pause-circle"></i> Disabled</span> - Peer disabled (won't connect)
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript for Real-Time Updates -->
+<script>
+// Format bytes to human readable
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return (bytes / Math.pow(k, i)).toFixed(2) + ' ' + sizes[i];
+}
+
+// Format timestamp to relative time
+function timeAgo(timestamp) {
+    if (!timestamp || timestamp === 0) return 'Never';
+    
+    const now = Math.floor(Date.now() / 1000);
+    const diff = now - timestamp;
+    
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return Math.floor(diff / 60) + ' min ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + ' hrs ago';
+    return Math.floor(diff / 86400) + ' days ago';
+}
+
+// Update peer statistics
+function updatePeerStats() {
+    fetch('/api/peer-stats')
+        .then(response => response.json())
+        .then(data => {
+            let onlineCount = 0;
+            
+            for (const [peerId, stats] of Object.entries(data)) {
+                // Update status badge
+                const statusBadge = document.getElementById(`status-${peerId}`);
+                const statusText = statusBadge ? statusBadge.querySelector('.status-text') : null;
+                
+                if (statusBadge) {
+                    if (stats.online) {
+                        statusBadge.className = 'badge bg-success peer-status';
+                        if (statusText) statusText.textContent = 'Online';
+                        onlineCount++;
+                    } else {
+                        statusBadge.className = 'badge bg-danger peer-status';
+                        if (statusText) statusText.textContent = 'Offline';
+                    }
+                }
+                
+                // Update bandwidth
+                const rxElement = document.getElementById(`rx-${peerId}`);
+                const txElement = document.getElementById(`tx-${peerId}`);
+                
+                if (rxElement) {
+                    rxElement.textContent = formatBytes(stats.rx_bytes);
+                }
+                if (txElement) {
+                    txElement.textContent = formatBytes(stats.tx_bytes);
+                }
+                
+                // Update last seen
+                const lastSeenElement = document.getElementById(`last-seen-${peerId}`);
+                if (lastSeenElement && stats.latest_handshake > 0) {
+                    lastSeenElement.textContent = timeAgo(stats.latest_handshake);
+                }
+            }
+            
+            // Update online count in summary card
+            const onlineCountElement = document.getElementById('online-count');
+            if (onlineCountElement) {
+                onlineCountElement.textContent = onlineCount;
+            }
+        })
+        .catch(error => console.error('Error fetching peer stats:', error));
+}
+
+// Update every 5 seconds
+setInterval(updatePeerStats, 5000);
+
+// Initial update
+updatePeerStats();
+</script>
+
+<style>
+/* Pulse animation for online status */
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.badge.bg-success .bi-circle-fill {
+    animation: pulse 2s infinite;
+}
+
+/* Disabled row styling */
+.table-secondary {
+    opacity: 0.7;
+}
+
+/* Responsive table */
+@media (max-width: 768px) {
+    .btn-group {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .btn-group .btn {
+        margin-bottom: 2px;
+    }
+}
+</style>
+{% endblock %}

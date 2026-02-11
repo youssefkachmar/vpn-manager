@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Add Peer - VPN Manager{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h2><i class="bi bi-plus-circle"></i> Add New Peer</h2>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('main.new_peer') }}">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Peer Name</label>
+                            <input type="text" class="form-control" id="name" name="name" 
+                                   placeholder="e.g., My Laptop, John's Phone" required>
+                            <div class="form-text">Give this peer a descriptive name</div>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle"></i> Create Peer
+                            </button>
+                            <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h5><i class="bi bi-info-circle"></i> What happens next?</h5>
+                    <ol>
+                        <li>WireGuard keys will be generated automatically</li>
+                        <li>An IP address will be assigned</li>
+                        <li>Configuration file will be created</li>
+                        <li>QR code will be generated for mobile devices</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
