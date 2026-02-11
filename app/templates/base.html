@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Professional WireGuard VPN Management System">
-    <title>{% block title %}VPN Manager{% endblock %}</title>
+    <title>{% block title %}VPN Manager Pro{% endblock %}</title>
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -27,7 +27,7 @@
     <nav class="navbar">
         <div class="container">
             <div class="d-flex justify-content-between align-items-center w-100">
-                <a href="{{ url_for('main.dashboard') }}" class="navbar-brand">
+                <a href="{{ url_for('main.dashboard') if current_user.is_authenticated else url_for('auth.login') }}" class="navbar-brand">
                     <i class="bi bi-shield-lock-fill"></i>
                     VPN Manager Pro
                 </a>
@@ -60,11 +60,6 @@
                             </ul>
                         </div>
                     {% endif %}
-
-                    <!-- Theme Toggle Button -->
-                    <button id="theme-toggle" class="theme-toggle" aria-label="Toggle dark mode">
-                        🌙
-                    </button>
                 </div>
             </div>
         </div>
@@ -107,16 +102,13 @@
             </p>
             <p class="text-secondary mb-0">
                 <i class="bi bi-server"></i>
-                Server: <code>vpnsrv.duckdns.org</code>
+                Endpoint: <code>{{ config.WG_SERVER_ENDPOINT if config else 'Not configured' }}</code>
             </p>
         </div>
     </footer>
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
-    <!-- Theme Toggle Script -->
-    <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
 
     {% block extra_js %}{% endblock %}
 </body>

@@ -29,6 +29,7 @@ server_public.key
 configs/*.conf
 
 # QR codes (can be regenerated)
+qrcodes/*.png
 app/static/qrcodes/*.png
 
 # Logs
