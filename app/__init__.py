@@ -29,9 +29,14 @@ def create_app():
     login_manager.init_app(app)
     login_manager.login_view = 'auth.login'
     
+    # Initialize SocketIO
+    from app.routes.websocket import socketio
+    socketio.init_app(app, async_mode='threading')
+    
     # Import models AFTER db is initialized
     from app.models.user import User
     from app.models.peer import Peer
+    from app.models.bandwidth import BandwidthHistory
     
     @login_manager.user_loader
     def load_user(user_id):
@@ -66,5 +71,9 @@ def create_app():
         except Exception as e:
             print(f"Error creating admin user: {e}")
             db.session.rollback()
+        
+        # Start bandwidth monitoring scheduler
+        from app.utils.monitor import start_bandwidth_monitor
+        start_bandwidth_monitor(app)
     
-    return app
+    return app, socketio

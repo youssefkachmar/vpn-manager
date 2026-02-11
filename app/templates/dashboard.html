@@ -1,8 +1,300 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard{% endblock %}
+{% block title %}Dashboard - VPN Manager Pro{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Pulse animation for online status */
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.badge.badge-success .bi-circle-fill,
+.status-pulse.online {
+    animation: pulse 2s infinite;
+}
+
+/* Disabled row styling */
+.table-secondary {
+    opacity: 0.7;
+}
+
+/* Stats cards with gradients */
+.stat-card.primary {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
+
+.stat-card.success {
+    background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.stat-card.warning {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.stat-card.secondary {
+    background: linear-gradient(135deg, #64748b, #475569);
+}
+</style>
+{% endblock %}
 
 {% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2><i class="bi bi-speedometer2"></i> VPN Dashboard</h2>
+                <div>
+                    <span class="me-3 text-secondary">Welcome, <strong>{{ username }}</strong></span>
+                    <a href="{{ url_for('main.new_peer') }}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Add New Peer
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Summary Cards -->
+    <div class="stats-grid">
+        <div class="stat-card primary">
+            <div class="stat-label"><i class="bi bi-people-fill"></i> Total Peers</div>
+            <div class="stat-value">{{ peers|length }}</div>
+        </div>
+        <div class="stat-card success">
+            <div class="stat-label"><i class="bi bi-wifi"></i> Online Now</div>
+            <div class="stat-value" id="online-count">0</div>
+        </div>
+        <div class="stat-card warning">
+            <div class="stat-label"><i class="bi bi-check-circle"></i> Enabled</div>
+            <div class="stat-value">{{ peers|selectattr('enabled')|list|length }}</div>
+        </div>
+        <div class="stat-card secondary">
+            <div class="stat-label"><i class="bi bi-pause-circle"></i> Disabled</div>
+            <div class="stat-value">{{ peers|rejectattr('enabled')|list|length }}</div>
+        </div>
+    </div>
+
+    <!-- Peers List -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <h4 class="card-header"><i class="bi bi-people"></i> Connected Peers</h4>
+                    {% if peers %}
+                    <div class="table-responsive mt-3">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>IP Address</th>
+                                    <th>Status</th>
+                                    <th>Enabled</th>
+                                    <th>Download</th>
+                                    <th>Upload</th>
+                                    <th>Last Seen</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for peer in peers %}
+                                <tr id="peer-row-{{ peer.id }}" {% if not peer.enabled %}class="table-secondary"{% endif %}>
+                                    <td>
+                                        <strong>{{ peer.name }}</strong>
+                                    </td>
+                                    <td>
+                                        <code>{{ peer.ip_address }}</code>
+                                    </td>
+                                    <td>
+                                        <span class="badge peer-status" data-peer-id="{{ peer.id }}" id="status-{{ peer.id }}">
+                                            <span class="status-pulse"></span>
+                                            <span class="status-text">Checking...</span>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if peer.enabled %}
+                                        <span class="badge badge-success">
+                                            <i class="bi bi-check-circle"></i> Enabled
+                                        </span>
+                                        {% else %}
+                                        <span class="badge badge-danger">
+                                            <i class="bi bi-pause-circle"></i> Disabled
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span id="rx-{{ peer.id }}" class="badge badge-info">0 B</span>
+                                    </td>
+                                    <td>
+                                        <span id="tx-{{ peer.id }}" class="badge badge-info">0 B</span>
+                                    </td>
+                                    <td>
+                                        <small id="last-seen-{{ peer.id }}">Never</small>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="{{ url_for('main.show_qrcode', peer_id=peer.id) }}"
+                                               class="btn btn-sm btn-primary"
+                                               title="Show QR Code">
+                                                <i class="bi bi-qr-code"></i>
+                                            </a>
+                                            
+                                            <a href="{{ url_for('main.download_config', peer_id=peer.id) }}"
+                                               class="btn btn-sm btn-success"
+                                               title="Download Config">
+                                                <i class="bi bi-download"></i>
+                                            </a>
+                                            
+                                            <form method="POST" action="{{ url_for('main.toggle_peer', peer_id=peer.id) }}" style="display: inline;">
+                                                {% if peer.enabled %}
+                                                <button type="submit" class="btn btn-sm btn-warning" title="Disable Peer" onclick="return confirm('Disable this peer?');">
+                                                    <i class="bi bi-pause-circle"></i>
+                                                </button>
+                                                {% else %}
+                                                <button type="submit" class="btn btn-sm btn-success" title="Enable Peer" onclick="return confirm('Enable this peer?');">
+                                                    <i class="bi bi-play-circle"></i>
+                                                </button>
+                                                {% endif %}
+                                            </form>
+                                            
+                                            <form method="POST" action="{{ url_for('main.delete_peer', peer_id=peer.id) }}" 
+                                                  onsubmit="return confirm('Are you sure you want to permanently delete peer \'{{ peer.name }}\'? This cannot be undone!');"
+                                                  style="display: inline;">
+                                                <button type="submit" class="btn btn-sm btn-danger" title="Delete Peer">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info mt-3">
+                        <i class="bi bi-info-circle"></i> No peers yet. <a href="{{ url_for('main.new_peer') }}">Create your first peer</a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="row mt-3">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-body">
+                    <h6><i class="bi bi-info-circle"></i> Status Legend:</h6>
+                    <span class="badge badge-success me-2"><span class="status-pulse online"></span> Online</span> - Connected within last 3 minutes
+                    <span class="badge badge-danger me-2 ms-3"><span class="status-pulse offline"></span> Offline</span> - Not connected
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Socket.IO for real-time updates -->
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+
+<script>
+// Format bytes to human readable
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return (bytes / Math.pow(k, i)).toFixed(2) + ' ' + sizes[i];
+}
+
+// Format timestamp to relative time
+function timeAgo(timestamp) {
+    if (!timestamp || timestamp === 0) return 'Never';
+    
+    const now = Math.floor(Date.now() / 1000);
+    const diff = now - timestamp;
+    
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return Math.floor(diff / 60) + ' min ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + ' hrs ago';
+    return Math.floor(diff / 86400) + ' days ago';
+}
+
+// Initialize Socket.IO connection
+const socket = io();
+
+socket.on('connect', function() {
+    console.log('Connected to WebSocket');
+    // Request initial stats
+    requestStats();
+});
+
+socket.on('disconnect', function() {
+    console.log('Disconnected from WebSocket');
+});
+
+socket.on('peer_stats', function(data) {
+    let onlineCount = 0;
+    
+    for (const [peerId, stats] of Object.entries(data)) {
+        // Update status badge
+        const statusBadge = document.getElementById(`status-${peerId}`);
+        const statusPulse = statusBadge ? statusBadge.querySelector('.status-pulse') : null;
+        const statusText = statusBadge ? statusBadge.querySelector('.status-text') : null;
+        
+        if (statusBadge && statusPulse && statusText) {
+            if (stats.online) {
+                statusBadge.className = 'badge badge-success peer-status';
+                statusPulse.className = 'status-pulse online';
+                statusText.textContent = 'Online';
+                onlineCount++;
+            } else {
+                statusBadge.className = 'badge badge-danger peer-status';
+                statusPulse.className = 'status-pulse offline';
+                statusText.textContent = 'Offline';
+            }
+        }
+        
+        // Update bandwidth
+        const rxElement = document.getElementById(`rx-${peerId}`);
+        const txElement = document.getElementById(`tx-${peerId}`);
+        
+        if (rxElement) {
+            rxElement.textContent = stats.rx_formatted || formatBytes(stats.rx_bytes);
+        }
+        if (txElement) {
+            txElement.textContent = stats.tx_formatted || formatBytes(stats.tx_bytes);
+        }
+        
+        // Update last seen
+        const lastSeenElement = document.getElementById(`last-seen-${peerId}`);
+        if (lastSeenElement && stats.latest_handshake > 0) {
+            lastSeenElement.textContent = timeAgo(stats.latest_handshake);
+        }
+    }
+    
+    // Update online count in summary card
+    const onlineCountElement = document.getElementById('online-count');
+    if (onlineCountElement) {
+        onlineCountElement.textContent = onlineCount;
+    }
+});
+
+socket.on('error', function(data) {
+    console.error('WebSocket error:', data);
+});
+
+function requestStats() {
+    socket.emit('request_stats');
+}
+
+// Request stats every 5 seconds
+setInterval(requestStats, 5000);
+</script>
+{% endblock %}
 <div class="container-fluid mt-4">
     <div class="row mb-4">
         <div class="col-md-12">

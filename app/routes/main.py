@@ -269,3 +269,46 @@ def settings():
     }
 
     return render_template('settings.html', settings=settings_data)
+
+@main.route('/api/bandwidth/<int:peer_id>')
+def get_bandwidth_history(peer_id):
+    """API endpoint to get bandwidth history for graphs"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    from app.models.bandwidth import BandwidthHistory
+    from datetime import datetime, timedelta
+    
+    # Get period from query params (default 24h)
+    period = request.args.get('period', '24h')
+    
+    # Calculate time range
+    if period == '24h':
+        start_time = datetime.utcnow() - timedelta(hours=24)
+    elif period == '7d':
+        start_time = datetime.utcnow() - timedelta(days=7)
+    elif period == '30d':
+        start_time = datetime.utcnow() - timedelta(days=30)
+    else:
+        start_time = datetime.utcnow() - timedelta(hours=24)
+    
+    # Query bandwidth history
+    history = BandwidthHistory.query.filter(
+        BandwidthHistory.peer_id == peer_id,
+        BandwidthHistory.timestamp >= start_time
+    ).order_by(BandwidthHistory.timestamp.asc()).all()
+    
+    # Format data for Chart.js
+    data = {
+        'labels': [],
+        'rx_data': [],
+        'tx_data': []
+    }
+    
+    for record in history:
+        data['labels'].append(record.timestamp.strftime('%Y-%m-%d %H:%M'))
+        data['rx_data'].append(record.rx_bytes)
+        data['tx_data'].append(record.tx_bytes)
+    
+    return jsonify(data)
+
