@@ -11,6 +11,19 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
     
+    # Set WireGuard endpoint dynamically using public IP detection
+    from app.utils.network import get_public_ip
+    import os
+    
+    # Try to get from env first, then auto-detect
+    public_ip = os.getenv('PUBLIC_IP') or get_public_ip()
+    if public_ip:
+        app.config['WG_SERVER_ENDPOINT'] = f"{public_ip}:{app.config['WG_SERVER_PORT']}"
+        print(f"WireGuard endpoint set to: {app.config['WG_SERVER_ENDPOINT']}")
+    else:
+        app.config['WG_SERVER_ENDPOINT'] = f"your-server-ip:{app.config['WG_SERVER_PORT']}"
+        print("Warning: Could not detect public IP, using placeholder")
+    
     # Initialize extensions with app
     db.init_app(app)
     login_manager.init_app(app)
