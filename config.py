@@ -12,8 +12,8 @@ class Config:
     SECRET_KEY = 'your-secret-key-change-this-in-production'
     
     # WireGuard settings
-    WG_SERVER_ENDPOINT = 'vpnsrv.duckdns.org:51820'
-    WG_SERVER_PUBLIC_KEY = None
+    WG_SERVER_ENDPOINT = 'your-domain.com:51820'  # Or your public IP 
+    SECRET_KEY = 'your-secret-key'
     
     # Directories
     CONFIG_DIR = os.path.join(BASE_DIR, 'configs')
