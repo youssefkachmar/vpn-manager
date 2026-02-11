@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Settings - VPN Manager{% endblock %}
+{% block title %}Settings - VPN Manager Pro{% endblock %}
 
 {% block content %}
 <div class="container">
@@ -12,32 +12,30 @@
     </div>
 
     <!-- Server Information Card -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-primary text-white">
-            <h5 class="mb-0"><i class="bi bi-server"></i> WireGuard Server Information</h5>
-        </div>
+    <div class="card mb-4">
         <div class="card-body">
-            <div class="row">
+            <h5 class="card-header"><i class="bi bi-server"></i> WireGuard Server Information</h5>
+            <div class="row mt-3">
                 <div class="col-md-6 mb-3">
-                    <label class="fw-bold text-secondary">Server Endpoint:</label>
+                    <label class="form-label">Server Endpoint:</label>
                     <div class="input-group">
                         <input type="text" class="form-control" value="{{ settings.endpoint }}" readonly>
-                        <button class="btn btn-outline-secondary" onclick="copyToClipboard('{{ settings.endpoint }}')">
+                        <button class="btn btn-outline-secondary" onclick="copyToClipboard('{{ settings.endpoint }}', this)">
                             <i class="bi bi-clipboard"></i>
                         </button>
                     </div>
                 </div>
                 <div class="col-md-6 mb-3">
-                    <label class="fw-bold text-secondary">Server Public Key:</label>
+                    <label class="form-label">Server Public Key:</label>
                     <div class="input-group">
                         <input type="text" class="form-control" value="{{ settings.server_public_key }}" readonly>
-                        <button class="btn btn-outline-secondary" onclick="copyToClipboard('{{ settings.server_public_key }}')">
+                        <button class="btn btn-outline-secondary" onclick="copyToClipboard('{{ settings.server_public_key }}', this)">
                             <i class="bi bi-clipboard"></i>
                         </button>
                     </div>
                 </div>
                 <div class="col-md-6 mb-3">
-                    <label class="fw-bold text-secondary">Network Interface:</label>
+                    <label class="form-label">Network Interface:</label>
                     <input type="text" class="form-control" value="{{ settings.interface }}" readonly>
                 </div>
             </div>
@@ -45,62 +43,58 @@
     </div>
 
     <!-- Statistics Card -->
-    <div class="card shadow-sm">
-        <div class="card-header bg-info text-white">
-            <h5 class="mb-0"><i class="bi bi-bar-chart-fill"></i> Peer Statistics</h5>
+    <div class="stats-grid">
+        <div class="stat-card primary">
+            <div class="stat-label"><i class="bi bi-people-fill"></i> Total Peers</div>
+            <div class="stat-value">{{ settings.total_peers }}</div>
         </div>
-        <div class="card-body">
-            <div class="row text-center">
-                <div class="col-md-4 mb-3">
-                    <div class="p-3 bg-light rounded">
-                        <h3 class="text-primary mb-0">{{ settings.total_peers }}</h3>
-                        <small class="text-secondary">Total Peers</small>
-                    </div>
-                </div>
-                <div class="col-md-4 mb-3">
-                    <div class="p-3 bg-light rounded">
-                        <h3 class="text-success mb-0">{{ settings.enabled_peers }}</h3>
-                        <small class="text-secondary">Enabled Peers</small>
-                    </div>
-                </div>
-                <div class="col-md-4 mb-3">
-                    <div class="p-3 bg-light rounded">
-                        <h3 class="text-warning mb-0">{{ settings.disabled_peers }}</h3>
-                        <small class="text-secondary">Disabled Peers</small>
-                    </div>
-                </div>
-            </div>
+        <div class="stat-card success">
+            <div class="stat-label"><i class="bi bi-check-circle"></i> Enabled Peers</div>
+            <div class="stat-value">{{ settings.enabled_peers }}</div>
+        </div>
+        <div class="stat-card warning">
+            <div class="stat-label"><i class="bi bi-pause-circle"></i> Disabled Peers</div>
+            <div class="stat-value">{{ settings.disabled_peers }}</div>
         </div>
     </div>
 
     <!-- WireGuard Commands Card -->
-    <div class="card shadow-sm mt-4">
-        <div class="card-header bg-dark text-white">
-            <h5 class="mb-0"><i class="bi bi-terminal"></i> Useful Commands</h5>
-        </div>
+    <div class="card mt-4">
         <div class="card-body">
-            <div class="mb-3">
-                <label class="fw-bold">View WireGuard Status:</label>
-                <pre class="bg-dark text-white p-2 rounded"><code>sudo wg show {{ settings.interface }}</code></pre>
-            </div>
-            <div class="mb-3">
-                <label class="fw-bold">Restart WireGuard:</label>
-                <pre class="bg-dark text-white p-2 rounded"><code>sudo systemctl restart wg-quick@{{ settings.interface }}</code></pre>
-            </div>
-            <div class="mb-3">
-                <label class="fw-bold">View WireGuard Logs:</label>
-                <pre class="bg-dark text-white p-2 rounded"><code>sudo journalctl -u wg-quick@{{ settings.interface }} -f</code></pre>
+            <h5 class="card-header"><i class="bi bi-terminal"></i> Useful Commands</h5>
+            <div class="mt-3">
+                <div class="mb-3">
+                    <label class="form-label">View WireGuard Status:</label>
+                    <pre class="bg-secondary text-primary p-2 rounded"><code>sudo wg show {{ settings.interface }}</code></pre>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Restart WireGuard:</label>
+                    <pre class="bg-secondary text-primary p-2 rounded"><code>sudo systemctl restart wg-quick@{{ settings.interface }}</code></pre>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">View WireGuard Logs:</label>
+                    <pre class="bg-secondary text-primary p-2 rounded"><code>sudo journalctl -u wg-quick@{{ settings.interface }} -f</code></pre>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-function copyToClipboard(text) {
+function copyToClipboard(text, button) {
     navigator.clipboard.writeText(text).then(function() {
-        alert('Copied to clipboard!');
+        const originalHTML = button.innerHTML;
+        button.innerHTML = '<i class="bi bi-check-circle"></i>';
+        button.classList.add('btn-success');
+        button.classList.remove('btn-outline-secondary');
+        setTimeout(function() {
+            button.innerHTML = originalHTML;
+            button.classList.remove('btn-success');
+            button.classList.add('btn-outline-secondary');
+        }, 2000);
     }, function(err) {
         console.error('Could not copy text: ', err);
+        alert('Failed to copy to clipboard');
     });
 }
 </script>
