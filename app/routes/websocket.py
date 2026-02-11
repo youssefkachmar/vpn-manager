@@ -4,8 +4,12 @@ from flask_login import current_user
 from app.utils.wireguard import WireGuardManager
 from app.models.peer import Peer
 from app.utils.monitor import format_bytes
+import os
 
-socketio = SocketIO(cors_allowed_origins="*")
+# Get allowed origins from environment or use localhost for development
+allowed_origins = os.getenv('SOCKETIO_CORS_ORIGINS', 'http://localhost:5000,http://127.0.0.1:5000').split(',')
+
+socketio = SocketIO(cors_allowed_origins=allowed_origins)
 
 @socketio.on('connect')
 def handle_connect():

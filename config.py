@@ -15,9 +15,9 @@ class Config:
     # Secret key for sessions
     SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key-change-this-in-production')
     
-    # WireGuard settings - Use environment variable or auto-detect public IP
-    # This will be set dynamically using get_public_ip() in the app
-    WG_SERVER_ENDPOINT = None  # Will be set at runtime
+    # WireGuard settings - Endpoint set at runtime
+    # Priority: 1) PUBLIC_IP environment variable, 2) Auto-detect via get_public_ip()
+    WG_SERVER_ENDPOINT = None  # Will be set dynamically in app initialization
     WG_SERVER_PORT = 51820
     
     # Directories

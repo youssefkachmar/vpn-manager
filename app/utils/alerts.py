@@ -2,6 +2,10 @@ import requests
 from datetime import datetime, timedelta
 from flask import current_app
 
+def format_timestamp_iso():
+    """Generate ISO 8601 timestamp with Z suffix for UTC"""
+    return datetime.utcnow().isoformat() + 'Z'
+
 def check_unusual_traffic(peer, current_stats):
     """Check if peer has unusual traffic patterns"""
     from app.models.bandwidth import BandwidthHistory
@@ -42,7 +46,7 @@ def check_unusual_traffic(peer, current_stats):
             'peer_name': peer.name,
             'peer_ip': peer.ip_address,
             'details': f'Downloaded {rx_gb:.2f}GB in the last hour',
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'timestamp': format_timestamp_iso(),
             'severity': 'warning',
             'rx_bytes': int(rx_delta),
             'tx_bytes': int(tx_delta)
@@ -53,7 +57,7 @@ def check_unusual_traffic(peer, current_stats):
             'peer_name': peer.name,
             'peer_ip': peer.ip_address,
             'details': f'Uploaded {tx_gb:.2f}GB in the last hour',
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'timestamp': format_timestamp_iso(),
             'severity': 'warning',
             'rx_bytes': int(rx_delta),
             'tx_bytes': int(tx_delta)
@@ -78,3 +82,4 @@ def send_webhook_alert(payload):
     except Exception as e:
         print(f"Failed to send webhook: {e}")
         return False
+
